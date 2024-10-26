@@ -1,25 +1,39 @@
 from math import *
 
 # Settings
-V_in = 600
+V_in = 500
 D = 0.5
-I_out = 100
+I_out = 60
 f_sw = 40e3
 D_ripple = 0.01
-T_a = 30
+T_a = 40
 
+# https://semiq.com/wp-content/uploads/2023/09/GCMX010A120B2B1P.pdf
+# # Electrical info
+# Q_g = 476e-9
+# V_f = 3.6
+# V_g = 25
+# R_on = 12e-3
+# E_on = 1.54e-3
+# E_off = 0.49e-3
+# E_recov = 0.53e-3
+# # Thermal info
+# T_Jmax = 175
+# R_thJC = 0.2
+
+# https://semiq.com/wp-content/uploads/2023/09/GCMX020A120B2B1P.pdf
 # Electrical info
-Q_g = 476e-9
-V_f = 3.6
+Q_g = 241e-9
+V_f = 3.9
 V_g = 25
-R_on = 8.9e-3
-E_on = 1.54e-3
-E_off = 0.49e-3
-E_recov = 0.53e-3
-
+R_on = 25e-3
+E_on = 0.72e-3
+E_off = 0.16e-3
+E_recov = 0.31e-3
 # Thermal info
-T_Jmax = 150
-R_thJC = 0.2
+T_Jmax = 175
+R_thJC = 0.39
+
 
 V_ripple = V_in * D_ripple
 I_ripple = I_out / 2
@@ -27,7 +41,7 @@ C_in = (1 / f_sw) * I_ripple / V_ripple
 
 P_sw = f_sw * (E_on + E_off + E_recov)
 P_cond = D * I_out**2 * R_on + (1 - D) * I_out * V_f
-E_drv = V_g * Q_g
+E_drv = V_g * Q_g * 2
 P_drv = f_sw * E_drv
 P_fet = P_sw + P_cond
 
