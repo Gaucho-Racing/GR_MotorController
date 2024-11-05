@@ -179,7 +179,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "c:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/build/Debug"
+			"value" : "c:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/build/Debug"
 		},
 		{
 			"name" : "CMAKE_CACHE_MAJOR_VERSION",
@@ -619,7 +619,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/build/Debug/CMakeFiles/pkgRedirects"
+			"value" : "C:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/build/Debug/CMakeFiles/pkgRedirects"
 		},
 		{
 			"name" : "CMAKE_GENERATOR",
@@ -679,7 +679,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "C:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware"
+			"value" : "C:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware"
 		},
 		{
 			"name" : "CMAKE_INSTALL_PREFIX",
@@ -707,7 +707,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "C:/PROGRA~2/Ninja/ninja.exe"
+			"value" : "C:/PROGRA~1/Ninja/ninja.exe"
 		},
 		{
 			"name" : "CMAKE_MODULE_LINKER_FLAGS",
@@ -1159,7 +1159,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "C:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/cmake/gcc-arm-none-eabi.cmake"
+			"value" : "C:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/cmake/gcc-arm-none-eabi.cmake"
 		},
 		{
 			"name" : "CMAKE_VERBOSE_MAKEFILE",
@@ -1187,7 +1187,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/build/Debug"
+			"value" : "C:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/build/Debug"
 		},
 		{
 			"name" : "Firmware_IS_TOP_LEVEL",
@@ -1211,7 +1211,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware"
+			"value" : "C:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware"
 		},
 		{
 			"name" : "stm32cubemx_BINARY_DIR",
@@ -1223,7 +1223,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/build/Debug/cmake/stm32cubemx"
+			"value" : "C:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/build/Debug/cmake/stm32cubemx"
 		},
 		{
 			"name" : "stm32cubemx_IS_TOP_LEVEL",
@@ -1247,7 +1247,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/cmake/stm32cubemx"
+			"value" : "C:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/cmake/stm32cubemx"
 		}
 	],
 	"kind" : "cache",

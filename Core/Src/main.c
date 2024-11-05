@@ -29,6 +29,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <math.h>
+#include <stdio.h>
+#include "PID.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,12 +49,31 @@
 #define U_TIMER LL_HRTIM_TIMER_A
 #define V_TIMER LL_HRTIM_TIMER_E
 #define W_TIMER LL_HRTIM_TIMER_F
+#define U_current phase_current[0]
+#define V_current phase_current[1]
+#define W_current phase_current[2]
+#define USE_HALL_SENSOR 0
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+const uint8_t HallToStep[8] = {0, 2, 6, 1, 4, 3, 5, 0};
+const int StepToPhase[7][3] = {
+  {0,  0,  0},
+  {1, -1,  0},
+  {1,  0, -1},
+  {0,  1, -1},
+  {-1, 1,  0},
+  {-1, 0,  1},
+  {0, -1,  1}
+};
 
+const float ClarkeT[3][3] = {
+  {0.666666667f, -0.333333333f, -0.333333333f},
+  {0.0f, 0.5773502691896257f, -0.5773502691896257f},
+  {0.333333333f, 0.333333333f, 0.333333333f}
+};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -60,30 +81,21 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void writePwm(uint32_t timer, int32_t duty);
 
-int16_t Read_ADC1_Channel(uint32_t channel)
-{
-  // Set the ADC channel
-  LL_ADC_REG_SetSequencerRanks(ADC1, LL_ADC_REG_RANK_1, channel);
+int16_t Read_ADC1_Channel(uint32_t channel);
 
-  // Start ADC conversion
-  LL_ADC_REG_StartConversion(ADC1);
+void print_CANBus(char* text);
 
-  // Wait until conversion is complete
-  while (LL_ADC_IsActiveFlag_EOC(ADC1) == 0);
-  
-  // Get ADC conversion result
-  int16_t adc_value = LL_ADC_REG_ReadConversionData12(ADC1);
-  
-  // Clear the EOC flag
-  LL_ADC_ClearFlag_EOC(ADC1);
-  
-  return adc_value;
-}
+void ClarkeTransform(float* result, float* input);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+FDCAN_RxHeaderTypeDef RxHeader;
+uint8_t RxData[8];
+FDCAN_TxHeaderTypeDef TxHeader;
+uint8_t TxData[8];
+char printBuffer[1024];
+PID PID_I_d, PID_I_q;
 /* USER CODE END 0 */
 
 /**
@@ -94,16 +106,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  const uint8_t HallToStep[8] = {0, 2, 6, 1, 4, 3, 5, 0};
-  const int StepToPhase[7][3] = {
-    {0,  0,  0},
-    {1, -1,  0},
-    {1,  0, -1},
-    {0,  1, -1},
-    {-1, 1,  0},
-    {-1, 0,  1},
-    {0, -1,  1}
-  };
+  PID_setParams(&PID_I_d, 1, 1, 0);
+  PID_setParams(&PID_I_q, 1, 1, 0);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -165,26 +169,26 @@ int main(void)
   int32_t U_current_os = 0;
   int32_t V_current_os = 0;
   int32_t W_current_os = 0;
-  // LL_mDelay(100);
-  // for (uint16_t i = 0; i < 1024; i++) {
-  //   U_current_os += Read_ADC1_Channel(LL_ADC_CHANNEL_1);
-  //   V_current_os += Read_ADC1_Channel(LL_ADC_CHANNEL_6);
-  //   W_current_os += Read_ADC1_Channel(LL_ADC_CHANNEL_8);
-  //   LL_mDelay(1);
-  // }
-  // U_current_os = U_current_os >> 10;
-  // V_current_os = V_current_os >> 10;
-  // W_current_os = W_current_os >> 10;
 
   // enable microsecond counter
   LL_TIM_EnableCounter(TIM2);
+
+  if (!USE_HALL_SENSOR) {
+    // RM44SI encoder setup (Emrax motor)
+    LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_15); // data port input mode
+  }
+
+  // CANBus setup
+  HAL_FDCAN_Start(&hfdcan2);
 
   uint32_t micros = TIM2->CNT;
   uint32_t lastMicros = 0;
   int32_t dutyCycle = 0;
   uint8_t HallSig;
   float CCTRL_p, CCTRL_i = 0;
-  float U_current, V_current, W_current, AC_current;
+  float phase_current[3];
+  float AC_current;
+  float Target_current = 1.0f;
   uint32_t count = 0;
   /* USER CODE END 2 */
 
@@ -193,20 +197,48 @@ int main(void)
   while (1)
   {
     micros = TIM2->CNT;
-    U_current = (float)(Read_ADC1_Channel(LL_ADC_CHANNEL_1) - U_current_os) * 0.0625;
-    V_current = (float)(Read_ADC1_Channel(LL_ADC_CHANNEL_6) - V_current_os) * 0.0625;
-    W_current = (float)(Read_ADC1_Channel(LL_ADC_CHANNEL_8) - W_current_os) * 0.0625;
-    AC_current = sqrt((U_current * U_current) + (V_current * V_current) + (W_current * W_current));
-    float Target_current = 0.5;
-    CCTRL_p = Target_current - AC_current;
-    CCTRL_i += CCTRL_p * 1e-2;
-    CCTRL_i = fmaxf(fminf(CCTRL_i, 1), 0);
-    dutyCycle = (fmaxf(fminf(CCTRL_p*0.1 + CCTRL_i, 1), 0)) * 32000.0;
-    HallSig = GPIOC->IDR >> 13;
-    HallSig = ((HallSig & 0b001) << 2) + (HallSig & 0b010) + ((HallSig & 0b100) >> 2);
-    writePwm(U_TIMER, StepToPhase[HallToStep[HallSig]][0] * dutyCycle);
-    writePwm(V_TIMER, StepToPhase[HallToStep[HallSig]][1] * dutyCycle);
-    writePwm(W_TIMER, StepToPhase[HallToStep[HallSig]][2] * dutyCycle);
+
+    // read phase currents from ADC1
+    U_current = (float)(Read_ADC1_Channel(LL_ADC_CHANNEL_1) - U_current_os) * 0.0625f;
+    V_current = (float)(Read_ADC1_Channel(LL_ADC_CHANNEL_8) - V_current_os) * 0.0625f;
+    W_current = (float)(Read_ADC1_Channel(LL_ADC_CHANNEL_6) - W_current_os) * 0.0625f;
+
+    // drive motor with hall sensor
+    if (USE_HALL_SENSOR) {
+      AC_current = sqrtf(((U_current * U_current) + (V_current * V_current) + (W_current * W_current)));
+      CCTRL_p = Target_current - AC_current;
+      CCTRL_i += CCTRL_p * (micros - lastMicros) * 1e-4f;
+      CCTRL_i = fmaxf(fminf(CCTRL_i, 1), 0);
+      dutyCycle = (fmaxf(fminf(CCTRL_p*0.01f + CCTRL_i, 1), 0)) * 32000.0f;
+      HallSig = GPIOC->IDR >> 13;
+      HallSig = ((HallSig & 0b001) << 2) + (HallSig & 0b010) + ((HallSig & 0b100) >> 2);
+      writePwm(U_TIMER, StepToPhase[HallToStep[HallSig]][0] * dutyCycle);
+      writePwm(V_TIMER, StepToPhase[HallToStep[HallSig]][1] * dutyCycle);
+      writePwm(W_TIMER, StepToPhase[HallToStep[HallSig]][2] * dutyCycle);
+    }
+    // drive motor with encoder and FOC
+    else {
+      // read physical rotor position
+      uint16_t phys_position;
+      float elec_position;
+      uint8_t TxBuffer[2];
+      uint8_t RxBuffer[2];
+      HAL_SPI_TransmitReceive(&hspi3, (uint8_t *)TxBuffer, (uint8_t *)RxBuffer, 1, 5000);
+      memcpy(&phys_position, RxBuffer, 2);
+      phys_position = (phys_position & 0x7FFF) >> 2;
+      elec_position = fmodf(phys_position / 8192.0f * 10.0f, 1.0f) * M_PI * 2.0f; // radians
+      sprintf(printBuffer, "%5.03f\n", elec_position);
+      print_CANBus(printBuffer);
+      
+      // FOC
+      float aby[3];
+      ClarkeTransform(aby, phase_current);
+      float I_d = aby[0] * cosf(elec_position) + aby[1] * sinf(elec_position); // part transform
+      float I_q = aby[1] * cosf(elec_position) + aby[0] * sinf(elec_position);
+
+    }
+
+    // calibrate current sensor offset
     if (count == 0) {
       LL_GPIO_SetOutputPin(GPIOB, LL_GPIO_PIN_12);
       writePwm(U_TIMER, 0);
@@ -216,18 +248,18 @@ int main(void)
       U_current_os = 0;
       V_current_os = 0;
       W_current_os = 0;
-      for (uint16_t i = 0; i < 2048; i++) {
+      for (uint16_t i = 0; i < 1024; i++) {
         U_current_os += Read_ADC1_Channel(LL_ADC_CHANNEL_1);
-        V_current_os += Read_ADC1_Channel(LL_ADC_CHANNEL_6);
-        W_current_os += Read_ADC1_Channel(LL_ADC_CHANNEL_8);
+        V_current_os += Read_ADC1_Channel(LL_ADC_CHANNEL_8);
+        W_current_os += Read_ADC1_Channel(LL_ADC_CHANNEL_6);
       }
-      U_current_os = U_current_os >> 11;
-      V_current_os = V_current_os >> 11;
-      W_current_os = W_current_os >> 11;
+      U_current_os = U_current_os >> 10;
+      V_current_os = V_current_os >> 10;
+      W_current_os = W_current_os >> 10;
       LL_GPIO_ResetOutputPin(GPIOB, LL_GPIO_PIN_12);
     }
     count++;
-    if (count > 1000000) count = 0;
+    if (count > 100000) count = 0;
     lastMicros = micros;
     /* USER CODE END WHILE */
 
@@ -312,6 +344,58 @@ void writePwm(uint32_t timer, int32_t duty) {
     LL_HRTIM_TIM_SetCompare2(HRTIM1, timer, 64001);
     LL_HRTIM_TIM_SetCompare1(HRTIM1, timer, 0);
   }
+}
+
+int16_t Read_ADC1_Channel(uint32_t channel)
+{
+  // Set the ADC channel
+  LL_ADC_REG_SetSequencerRanks(ADC1, LL_ADC_REG_RANK_1, channel);
+
+  // Start ADC conversion
+  LL_ADC_REG_StartConversion(ADC1);
+
+  // Wait until conversion is complete
+  while (LL_ADC_IsActiveFlag_EOC(ADC1) == 0);
+  
+  // Get ADC conversion result
+  int16_t adc_value = LL_ADC_REG_ReadConversionData12(ADC1);
+  
+  // Clear the EOC flag
+  LL_ADC_ClearFlag_EOC(ADC1);
+  
+  return adc_value;
+}
+
+void print_CANBus(char* text) {
+  TxHeader.Identifier = 0x3FF;
+  TxHeader.IdType = FDCAN_STANDARD_ID;
+  TxHeader.TxFrameType = FDCAN_DATA_FRAME;
+  TxHeader.DataLength = FDCAN_DLC_BYTES_8;
+  TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+  TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
+  TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
+  TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+  TxHeader.MessageMarker = 0;
+  uint32_t i = 0;
+  while (text[i] != '\0') {
+    TxData[i & 0b111U] = text[i];
+    if ((i & 0b111U) == 0b111U) HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan2, &TxHeader, TxData);
+    i++;
+  }
+  if (i & 0b111U) {
+    for (uint8_t j = i & 0b111U; j < 8; j++) {
+      TxData[j] = 0;
+    }
+    HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan2, &TxHeader, TxData);
+  }
+}
+
+// input: float[3] {u,v,w}
+// result: float[3] {alpha,beta,gamma}
+void ClarkeTransform(float* result, float* input) {
+  result[0] = input[0] * ClarkeT[0][0] + input[1] * ClarkeT[0][1] + input[2] * ClarkeT[0][2];
+  result[1] = input[0] * ClarkeT[1][0] + input[1] * ClarkeT[1][1] + input[2] * ClarkeT[1][2];
+  result[2] = input[0] * ClarkeT[2][0] + input[1] * ClarkeT[2][1] + input[2] * ClarkeT[2][2];
 }
 /* USER CODE END 4 */
 
