@@ -11,7 +11,8 @@
 		"commands" : 
 		[
 			"add_executable",
-			"target_link_libraries"
+			"target_link_libraries",
+			"target_sources"
 		],
 		"files" : 
 		[
@@ -31,7 +32,13 @@
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 64,
+				"line" : 65,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 49,
 				"parent" : 0
 			}
 		]
@@ -138,7 +145,8 @@
 				37,
 				38,
 				39,
-				40
+				40,
+				41
 			]
 		},
 		{
@@ -193,7 +201,7 @@
 			"language" : "ASM",
 			"sourceIndexes" : 
 			[
-				41
+				42
 			]
 		}
 	],
@@ -266,19 +274,26 @@
 				37,
 				38,
 				39,
-				40
+				40,
+				41
 			]
 		},
 		{
 			"name" : "",
 			"sourceIndexes" : 
 			[
-				41
+				42
 			]
 		}
 	],
 	"sources" : 
 	[
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 0,
+			"path" : "Core/Src/PID.c",
+			"sourceGroupIndex" : 0
+		},
 		{
 			"backtrace" : 2,
 			"compileGroupIndex" : 0,

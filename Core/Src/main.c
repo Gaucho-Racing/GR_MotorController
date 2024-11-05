@@ -183,6 +183,7 @@ int main(void)
 
   uint32_t micros = TIM2->CNT;
   uint32_t lastMicros = 0;
+  float dt = (micros - lastMicros) * 1e-6f;
   int32_t dutyCycle = 0;
   uint8_t HallSig;
   float CCTRL_p, CCTRL_i = 0;
@@ -197,6 +198,7 @@ int main(void)
   while (1)
   {
     micros = TIM2->CNT;
+    dt = (micros - lastMicros) * 1e-6f;
 
     // read phase currents from ADC1
     U_current = (float)(Read_ADC1_Channel(LL_ADC_CHANNEL_1) - U_current_os) * 0.0625f;
@@ -207,7 +209,7 @@ int main(void)
     if (USE_HALL_SENSOR) {
       AC_current = sqrtf(((U_current * U_current) + (V_current * V_current) + (W_current * W_current)));
       CCTRL_p = Target_current - AC_current;
-      CCTRL_i += CCTRL_p * (micros - lastMicros) * 1e-4f;
+      CCTRL_i += CCTRL_p * (micros - lastMicros) * dt;
       CCTRL_i = fmaxf(fminf(CCTRL_i, 1), 0);
       dutyCycle = (fmaxf(fminf(CCTRL_p*0.01f + CCTRL_i, 1), 0)) * 32000.0f;
       HallSig = GPIOC->IDR >> 13;
@@ -227,15 +229,21 @@ int main(void)
       memcpy(&phys_position, RxBuffer, 2);
       phys_position = (phys_position & 0x7FFF) >> 2;
       elec_position = fmodf(phys_position / 8192.0f * 10.0f, 1.0f) * M_PI * 2.0f; // radians
+      float sin_elec_position = sinf(elec_position);
+      float cos_elec_position = cosf(elec_position);
       sprintf(printBuffer, "%5.03f\n", elec_position);
       print_CANBus(printBuffer);
       
       // FOC
       float aby[3];
       ClarkeTransform(aby, phase_current);
-      float I_d = aby[0] * cosf(elec_position) + aby[1] * sinf(elec_position); // part transform
-      float I_q = aby[1] * cosf(elec_position) + aby[0] * sinf(elec_position);
-
+      float I_d = aby[0] * cos_elec_position + aby[1] * sin_elec_position; // Park transform
+      float I_q = aby[1] * cos_elec_position + aby[0] * sin_elec_position;
+      float cmd_d = PID_update(&PID_I_d, I_d, 0.0f, dt);
+      float cmd_q = PID_update(&PID_I_q, I_q, Target_current, dt);
+      float cmd_a = cmd_d * cos_elec_position - cmd_q * sin_elec_position; // Inverse Park transform
+      float cmd_b = cmd_q * cos_elec_position + cmd_d * sin_elec_position;
+      // TODO: Space Vector PWM generator
     }
 
     // calibrate current sensor offset
