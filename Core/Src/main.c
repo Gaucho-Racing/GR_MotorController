@@ -52,7 +52,10 @@
 #define U_current phase_current[0]
 #define V_current phase_current[1]
 #define W_current phase_current[2]
-#define USE_HALL_SENSOR 0
+// Motor settings
+#define USE_HALL_SENSOR 0 // 0 for encoder + FOC, 1 for hall sensor lookup
+#define N_POLES 10.0f // number of poles
+#define N_STEP_ENCODER 8192.0f // Encoder number of steps
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -68,12 +71,7 @@ const int StepToPhase[7][3] = {
   {-1, 0,  1},
   {0, -1,  1}
 };
-
-const float ClarkeT[3][3] = {
-  {0.666666667f, -0.333333333f, -0.333333333f},
-  {0.0f, 0.5773502691896257f, -0.5773502691896257f},
-  {0.333333333f, 0.333333333f, 0.333333333f}
-};
+uint16_t Encoder_os = 0; // encoder offset angle
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -84,8 +82,6 @@ void writePwm(uint32_t timer, int32_t duty);
 int16_t Read_ADC1_Channel(uint32_t channel);
 
 void print_CANBus(char* text);
-
-void ClarkeTransform(float* result, float* input);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -106,8 +102,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  PID_setParams(&PID_I_d, 1, 1, 0);
-  PID_setParams(&PID_I_q, 1, 1, 0);
+  PID_setParams(&PID_I_d, 0.1f, 1, 0);
+  PID_setParams(&PID_I_q, 0.1f, 1, 0);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -228,22 +224,36 @@ int main(void)
       HAL_SPI_TransmitReceive(&hspi3, (uint8_t *)TxBuffer, (uint8_t *)RxBuffer, 1, 5000);
       memcpy(&phys_position, RxBuffer, 2);
       phys_position = (phys_position & 0x7FFF) >> 2;
-      elec_position = fmodf(phys_position / 8192.0f * 10.0f, 1.0f) * M_PI * 2.0f; // radians
+      elec_position = fmodf(phys_position / N_STEP_ENCODER * N_POLES, 1.0f) * M_PI * 2.0f; // radians
       float sin_elec_position = sinf(elec_position);
       float cos_elec_position = cosf(elec_position);
-      sprintf(printBuffer, "%5.03f\n", elec_position);
-      print_CANBus(printBuffer);
       
       // FOC
-      float aby[3];
-      ClarkeTransform(aby, phase_current);
-      float I_d = aby[0] * cos_elec_position + aby[1] * sin_elec_position; // Park transform
-      float I_q = aby[1] * cos_elec_position + aby[0] * sin_elec_position;
+      // Clarke transform
+      float I_a = U_current * 0.66666667f - V_current * 0.33333333f - W_current * 0.33333333f;
+      float I_b = 0.5773502691896257f * (V_current - W_current);
+      // Park transform
+      float I_d = I_a * cos_elec_position + I_b * sin_elec_position;
+      float I_q = I_b * cos_elec_position + I_a * sin_elec_position;
+      AC_current = I_q;
+      // PI controllers on Q and D
       float cmd_d = PID_update(&PID_I_d, I_d, 0.0f, dt);
       float cmd_q = PID_update(&PID_I_q, I_q, Target_current, dt);
-      float cmd_a = cmd_d * cos_elec_position - cmd_q * sin_elec_position; // Inverse Park transform
+      // Inverse Park transform
+      float cmd_a = cmd_d * cos_elec_position - cmd_q * sin_elec_position;
       float cmd_b = cmd_q * cos_elec_position + cmd_d * sin_elec_position;
-      // TODO: Space Vector PWM generator
+      // Inverse Clarke transform
+      float duty_u = cmd_a;
+      float duty_v = cmd_a * -0.5f + 0.8660254037844386f * cmd_b;
+      float duty_w = cmd_a * -0.5f - 0.8660254037844386f * cmd_b;
+      // Update duty cycle
+      writePwm(U_TIMER, duty_u * 32000.0f);
+      writePwm(V_TIMER, duty_v * 32000.0f);
+      writePwm(W_TIMER, duty_w * 32000.0f);
+      // debug print
+      sprintf(printBuffer, "phys_position:%u elec_position:%f I_q:%f I_d:%f\n", 
+        phys_position, elec_position, I_q, I_d);
+      print_CANBus(printBuffer);
     }
 
     // calibrate current sensor offset
@@ -396,14 +406,6 @@ void print_CANBus(char* text) {
     }
     HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan2, &TxHeader, TxData);
   }
-}
-
-// input: float[3] {u,v,w}
-// result: float[3] {alpha,beta,gamma}
-void ClarkeTransform(float* result, float* input) {
-  result[0] = input[0] * ClarkeT[0][0] + input[1] * ClarkeT[0][1] + input[2] * ClarkeT[0][2];
-  result[1] = input[0] * ClarkeT[1][0] + input[1] * ClarkeT[1][1] + input[2] * ClarkeT[1][2];
-  result[2] = input[0] * ClarkeT[2][0] + input[1] * ClarkeT[2][1] + input[2] * ClarkeT[2][2];
 }
 /* USER CODE END 4 */
 
