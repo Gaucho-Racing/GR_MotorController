@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/cmake/stm32cubemx
+# Install script for directory: C:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/cmake/stm32cubemx
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

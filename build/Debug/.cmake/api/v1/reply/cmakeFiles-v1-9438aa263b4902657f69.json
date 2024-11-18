@@ -153,8 +153,8 @@
 	"kind" : "cmakeFiles",
 	"paths" : 
 	{
-		"build" : "C:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/build/Debug",
-		"source" : "C:/Users/davor/SynologyDrive/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware"
+		"build" : "C:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware/build/Debug",
+		"source" : "C:/SynologyDrive/University/GauchoRacing/GR25/MotorController/Firmware"
 	},
 	"version" : 
 	{

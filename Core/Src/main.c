@@ -102,8 +102,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  PID_setParams(&PID_I_d, 0.1f, 1, 0);
-  PID_setParams(&PID_I_q, 0.1f, 1, 0);
+  PID_setParams(&PID_I_d, 0.1f, 0.1f, 0.0f);
+  PID_setParams(&PID_I_q, 0.1f, 10.0f, 0.0f);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -140,7 +140,7 @@ int main(void)
   /*
     HRTIM pin & comparator config
     Output 1: HG, start on comp2, stop on comp1, center align to 0
-    Output 2: LG, start on comp3, stop on comp4, center aligh to period/2 (32000)
+    Output 2: LG, start on comp4, stop on comp3, center aligh to 0
     Comp ranges: 1&3 0~65527, 2&4 24~65527
   */
   // turn off all phases
@@ -185,7 +185,7 @@ int main(void)
   float CCTRL_p, CCTRL_i = 0;
   float phase_current[3];
   float AC_current;
-  float Target_current = 1.0f;
+  float Target_current = 2.0f;
   uint32_t count = 0;
   /* USER CODE END 2 */
 
@@ -224,6 +224,7 @@ int main(void)
       HAL_SPI_TransmitReceive(&hspi3, (uint8_t *)TxBuffer, (uint8_t *)RxBuffer, 1, 5000);
       memcpy(&phys_position, RxBuffer, 2);
       phys_position = (phys_position & 0x7FFF) >> 2;
+      phys_position += Encoder_os;
       elec_position = fmodf(phys_position / N_STEP_ENCODER * N_POLES, 1.0f) * M_PI * 2.0f; // radians
       float sin_elec_position = sinf(elec_position);
       float cos_elec_position = cosf(elec_position);
@@ -234,26 +235,28 @@ int main(void)
       float I_b = 0.5773502691896257f * (V_current - W_current);
       // Park transform
       float I_d = I_a * cos_elec_position + I_b * sin_elec_position;
-      float I_q = I_b * cos_elec_position + I_a * sin_elec_position;
+      float I_q = I_b * cos_elec_position - I_a * sin_elec_position;
       AC_current = I_q;
       // PI controllers on Q and D
-      float cmd_d = PID_update(&PID_I_d, I_d, 0.0f, dt);
+      float cmd_d = 0;//PID_update(&PID_I_d, I_d, 0.0f, dt);
       float cmd_q = PID_update(&PID_I_q, I_q, Target_current, dt);
       // Inverse Park transform
       float cmd_a = cmd_d * cos_elec_position - cmd_q * sin_elec_position;
       float cmd_b = cmd_q * cos_elec_position + cmd_d * sin_elec_position;
       // Inverse Clarke transform
-      float duty_u = cmd_a;
-      float duty_v = cmd_a * -0.5f + 0.8660254037844386f * cmd_b;
-      float duty_w = cmd_a * -0.5f - 0.8660254037844386f * cmd_b;
+      int16_t duty_u = cmd_a * -32000;
+      int16_t duty_v = (cmd_a * -0.5f + 0.8660254037844386f * cmd_b) * -32000;
+      int16_t duty_w = (cmd_a * -0.5f - 0.8660254037844386f * cmd_b) * -32000;
       // Update duty cycle
-      writePwm(U_TIMER, duty_u * 32000.0f);
-      writePwm(V_TIMER, duty_v * 32000.0f);
-      writePwm(W_TIMER, duty_w * 32000.0f);
+      writePwm(U_TIMER, duty_u);
+      writePwm(V_TIMER, duty_v);
+      writePwm(W_TIMER, duty_w);
       // debug print
-      sprintf(printBuffer, "phys_position:%u elec_position:%f I_q:%f I_d:%f\n", 
-        phys_position, elec_position, I_q, I_d);
-      print_CANBus(printBuffer);
+      // sprintf(printBuffer, "phys_pos:%04u, elec_pos:%5.03f, I_q:%+5.03f, I_d:%+5.03f, cmd_d:%+5.03f, cmd_q:%+5.03f, U:%+05d, V:%+05d, W:%+05d, dt:%.05f\n", 
+      //   phys_position, elec_position, I_q, I_d, cmd_d, cmd_q, duty_u, duty_v, duty_w, dt);
+      // sprintf(printBuffer, "I_q:%+5.03f, I_d:%+5.03f, cmd_d:%+5.03f, cmd_q:%+5.03f, dt:%.05f\n", 
+      //   I_q, I_d, cmd_d, cmd_q, dt);
+      // print_CANBus(printBuffer);
     }
 
     // calibrate current sensor offset
@@ -347,20 +350,14 @@ void writePwm(uint32_t timer, int32_t duty) {
   if (duty >= 0) {
     LL_HRTIM_TIM_SetCompare2(HRTIM1, timer, 64001 - duty_abs);
     LL_HRTIM_TIM_SetCompare1(HRTIM1, timer, duty_abs);
-    LL_HRTIM_TIM_SetCompare3(HRTIM1, timer, 32000);
-    LL_HRTIM_TIM_SetCompare4(HRTIM1, timer, 32000);
+    LL_HRTIM_TIM_SetCompare4(HRTIM1, timer, 64001);
+    LL_HRTIM_TIM_SetCompare3(HRTIM1, timer, 0);
   }
   else {
-    if (duty_abs == 32000) {
-      LL_HRTIM_TIM_SetCompare3(HRTIM1, timer, 32000 - duty_abs);
-      LL_HRTIM_TIM_SetCompare4(HRTIM1, timer, 32001 + duty_abs);
-    }
-    else {
-      LL_HRTIM_TIM_SetCompare3(HRTIM1, timer, 32000 - duty_abs);
-      LL_HRTIM_TIM_SetCompare4(HRTIM1, timer, 32000 + duty_abs);
-    }
     LL_HRTIM_TIM_SetCompare2(HRTIM1, timer, 64001);
     LL_HRTIM_TIM_SetCompare1(HRTIM1, timer, 0);
+    LL_HRTIM_TIM_SetCompare4(HRTIM1, timer, 64001 - duty_abs);
+    LL_HRTIM_TIM_SetCompare3(HRTIM1, timer, duty_abs);
   }
 }
 
@@ -397,7 +394,10 @@ void print_CANBus(char* text) {
   uint32_t i = 0;
   while (text[i] != '\0') {
     TxData[i & 0b111U] = text[i];
-    if ((i & 0b111U) == 0b111U) HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan2, &TxHeader, TxData);
+    if ((i & 0b111U) == 0b111U) {
+      HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan2, &TxHeader, TxData);
+      while (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan2) == 0);
+    }
     i++;
   }
   if (i & 0b111U) {
