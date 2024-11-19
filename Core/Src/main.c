@@ -71,7 +71,7 @@ const int StepToPhase[7][3] = {
   {-1, 0,  1},
   {0, -1,  1}
 };
-uint16_t Encoder_os = 0; // encoder offset angle
+uint16_t Encoder_os = 731; // encoder offset angle
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -102,8 +102,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  PID_setParams(&PID_I_d, 0.1f, 0.1f, 0.0f);
-  PID_setParams(&PID_I_q, 0.1f, 10.0f, 0.0f);
+  PID_setParams(&PID_I_d, 0.0f, 10.0f, 0.0f);
+  PID_setParams(&PID_I_q, 0.0f, 10.0f, 0.0f);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -200,6 +200,7 @@ int main(void)
     U_current = (float)(Read_ADC1_Channel(LL_ADC_CHANNEL_1) - U_current_os) * 0.0625f;
     V_current = (float)(Read_ADC1_Channel(LL_ADC_CHANNEL_8) - V_current_os) * 0.0625f;
     W_current = (float)(Read_ADC1_Channel(LL_ADC_CHANNEL_6) - W_current_os) * 0.0625f;
+    //W_current = - U_current - V_current;
 
     // drive motor with hall sensor
     if (USE_HALL_SENSOR) {
@@ -238,7 +239,7 @@ int main(void)
       float I_q = I_b * cos_elec_position - I_a * sin_elec_position;
       AC_current = I_q;
       // PI controllers on Q and D
-      float cmd_d = 0;//PID_update(&PID_I_d, I_d, 0.0f, dt);
+      float cmd_d = 0;//PID_update(&PID_I_d, I_d, 0.0f, dt) * 0.1f;
       float cmd_q = PID_update(&PID_I_q, I_q, Target_current, dt);
       // Inverse Park transform
       float cmd_a = cmd_d * cos_elec_position - cmd_q * sin_elec_position;
@@ -280,7 +281,7 @@ int main(void)
       LL_GPIO_ResetOutputPin(GPIOB, LL_GPIO_PIN_12);
     }
     count++;
-    if (count > 100000) count = 0;
+    if (count > 500000) count = 0;
     lastMicros = micros;
     /* USER CODE END WHILE */
 
